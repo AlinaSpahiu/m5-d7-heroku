@@ -7,10 +7,29 @@ const { join } = require("path")
 const { readDB, writeDB } = require("../../utilities")
 
 const booksJsonPath = path.join(__dirname, "books.json")
+const commentsJsonPath = path.join(__dirname, "comments.json")
 
 const booksFolder = join(__dirname, "../../../public/img/books/")
 const upload = multer({})
 const booksRouter = express.Router()
+
+
+booksRouter.post("/:asin/comments", async(req, res, next) => {
+  console.log("ENTERING")
+  const books = await readDB(booksJsonPath)
+  const book = books.find((b) => b.asin === req.params.asin)
+  if (book) { 
+    const comments = await readDB(commentsJsonPath)
+    comments.push({...req.body, createdAt: new Date(), BookID: req.params.asin})
+    await writeDB(commentsJsonPath, comments)
+    res.send("OK")
+  }
+  else {
+    const error = new Error(`Book with asin ${req.params.asin} not found`)
+    error.httpStatusCode = 404
+    next(error)
+  }
+})
 
 booksRouter.get("/", async (req, res, next) => {
   try {
@@ -78,6 +97,12 @@ booksRouter.post(
   }
 )
 
+booksRouter.get("/:asin/comments", async (req, res, next)=>{
+  const comments = await readDB(commentsJsonPath)
+  res.send(comments.filter(comment => comment.BookID === req.params.asin))
+})
+
+
 booksRouter.put("/:asin", async (req, res, next) => {
   try {
     const books = await readDB(booksJsonPath)
@@ -118,12 +143,30 @@ booksRouter.delete("/:asin", async (req, res, next) => {
   }
 })
 
-booksRouter.post("/upload", upload.single("avatar"), async (req, res, next) => {
+booksRouter.post("/:asin/upload", upload.single("avatar"), async (req, res, next) => {
   try {
+    const fileName = req.params.asin + path.extname(req.file.originalname)
+    const fileDestination = join(booksFolder, fileName)
+    
     await fs.writeFile(
-      join(booksFolder, req.file.originalname),
+      fileDestination,
       req.file.buffer
     )
+
+    const books = await readDB(booksJsonPath)
+    const book = books.find((b) => b.asin === req.params.asin)
+    if (book) {
+      const position = books.indexOf(book)
+      const bookUpdated = { ...book, img: "http://localhost:3001/img/books/"  + fileName} // In this way we can also implement the "patch" endpoint
+      books[position] = bookUpdated
+      await writeDB(booksJsonPath, books)
+      res.status(200).send("Updated")
+    } else {
+      const error = new Error(`Book with asin ${req.params.asin} not found`)
+      error.httpStatusCode = 404
+      next(error)
+    }
+
   } catch (error) {
     next(error)
   }
