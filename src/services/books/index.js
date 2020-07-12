@@ -85,6 +85,7 @@ booksRouter.put("/:asin", async (req, res, next) => {
     if (book) {
       const position = books.indexOf(book)
       const bookUpdated = { ...book, ...req.body } // In this way we can also implement the "patch" endpoint
+      //{...book// we are getting all the previous fields, ...req.body// and here we just change the field we requested. for example "price":100 }
       books[position] = bookUpdated
       await writeDB(booksJsonPath, books)
       res.status(200).send("Updated")
